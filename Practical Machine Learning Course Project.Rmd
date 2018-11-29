@@ -1,0 +1,71 @@
+### Course Project: Prediction Model of the Manner of Execution of Unilateral Dumbbell Biceps Curl
+*John Paul Niño Sanglay*
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,message = F,warning = F)
+knitr::opts_chunk$set(fig.height=8)
+```
+### Overview
+A prediction model of the manner of execution of unilateral dumbbell biceps curl is developed from the data of accelerometers on the belt, forearm, arm, and dumbell of six (6) male participants aged between 20-28 years. With an accuracy of 99.42%, a random forest model with 52 predictors and 500 trees is selected to predict a test set with 20 different cases.
+
+### Introduction
+The goal of the coure project is to invertigate the quality of performing an exercise by a wearer of body accelerometers. Weight lifting exercise particularly unilateral dumbbell biceps curl is performed by six (6) male participants aged between 20-28 years. The execution of the experiment was supervised by an experienced weight lifter and a relatively light dumbbell weighing 1.25 kg was used. Body accelerometers are attached to the participants' belt, forearm, arm, and dumbell. There are five (5) different fashions of doing the specified exercise namely:
+
+* Class A: exactly according to the specification
+* Class B: throwing the elbows to the front
+* Class C: lifting the dumbbell only halfway
+* Class D: lowering the dumbbell only halfway
+* Class E: throwing the hips to the front
+
+Class A corresponds to the specified execution of the exercise while the other 4 classes correspond to common mistakes. The whole data set containing the information from the accelerometers can be found at:
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+### Exploratory Data Analysis
+The data is given in two sets; one for testing or model building while the other is for testing. The following code retreives the two (2) data sets and also loads libraries needed to a prediction model.
+```{r}
+library(caret); library(randomForest); library(gbm); library(e1071); training <- read.csv("pml-training.csv"); testing <- read.csv("pml-testing.csv"); str(training)
+```
+As shown in the results above, the training data set consists of 19622 observations or rows and 160 variables or columns. Some variables have black or NA values and the first seven (7) columns are irrelevant variables for the prediciton model. It is known that the column *classe* pertains to the classes or quality of execution of the exercise of the following observations.
+
+### Data Cleaning
+Both the training and testing sets are modified for model building since some variables or columns will not be used. The following code transforms both data sets.
+```{r}
+training[training==""] <- NA; testing[testing==""] <- NA; training <- training[ , colSums(is.na(training)) == 0]; testing <- testing[ ,colSums(is.na(testing))==0]; training <- na.omit(training); testing <- na.omit(testing); training <- training[,-c(1:7)]; testing <- testing[,-c(1:7)]; set.seed(123); intrain <- createDataPartition(training$classe,p=0.7,list=FALSE); trainset <- training[intrain,]; testset <- training[-intrain,]; dim(trainset)
+```
+From the previous code, columns and rows containing at least one blank or NA value are removed from both data sets. Also, the first seven (7) irrelevant columns are removed. Afterwards, the training data set is split into a model training set with 13737 observations and model test or validation set with 5885 observations. Results show that only 52 variables excluding the variable *classe* from 160 variables are to be used for model building.
+
+### Model Building
+The following five (5) prediction models are used and compared since these models can handle multinomial variables and results with factor as class:
+
+* Random Forest (RF)
+* Generalized Boosted Regression (GBM)
+* Linear Discriminant Analysis (LDA)
+* Recursive Partitioning and Regression Trees (RPART)
+* Support Vector Machine (SVM)
+
+```{r}
+model1 <- randomForest(classe~.,data=trainset); model2 <- gbm(classe~.,data=trainset,distribution="multinomial",n.trees=150,interaction.depth = 3, shrinkage = 0.1,n.minobsinnode = 10,cv.folds=5); model3 <- train(classe~.,data=trainset,method="lda",trControl=trainControl(method="cv",number=5)); model4 <- train(classe~.,data=trainset,method="rpart",trControl=trainControl(method="cv",number=5)); model5 <- svm(classe~.,data=trainset,cross=5);
+```
+For the model for RF, the default settings are chosen with 500 trees. Initial cross validation is not implemented and needed anymore since it has been noted already in the description of the function *randomForest*. For the model for GMB, the specified settings are chosen to achieve the highest possible accuracy of the model with 5 folds for the k-fold cross validation. For the models of LDA, RPART, and SVM, majority of the default settings are used except tuning the training model with 5 folds for the k fold cross validation.
+
+### Validation
+The remaining 30% of the total observations of the training data set is used for cross validation of the prediction models.
+```{r}
+A1 <- confusionMatrix(predict(model1,testset),testset$classe)$overall["Accuracy"]; A2 <- confusionMatrix(factor(colnames(predict(model2,n.trees=150,newdata=testset,type="response"))[apply(predict(model2,n.trees=150,newdata=testset,type="response"),1,which.max)]),testset$classe)$overall["Accuracy"]; A3 <- confusionMatrix(predict(model3,testset),testset$classe)$overall["Accuracy"]; A4 <- confusionMatrix(predict(model4,testset),testset$classe)$overall["Accuracy"]; A5 <- confusionMatrix(predict(model5,testset),testset$classe)$overall["Accuracy"]; tab <- data.frame(c(A1,A2,A3,A4,A5),row.names=c("RF","GBM","LDA","CART","SVM")); colnames(tab) <- "Accuracy"; tab
+```
+From the results above, RF model has the highest accuracy of 99.42% while CART model has the lowest accuracy of 55.23%. Model using RF algorithm is then the best candidate as prediction model with an out-of-sample error of 0.58%.
+
+To futher analyze the said model, its out-of-bag (OOB) error rate is determined.
+```{r}
+plot(model1$err.rate[,1], type = "l",ylab="Error Rate",xlab="Index",main="Out-of-Bag Error Rate of Random Forest Model")
+```
+From the figure, the OOB error rate immediately drops to 0.002 even when the number of trees for the random forest algorithm is less than 50 and it continues and maintains to be low. The model is consitent in giving minimal errors for prediction even for large number of trees.
+
+### Conclusion
+The chosen random forest model gives an accuracy of 99.42% as prediction model of the manner of execution of unilateral dumbbell biceps curl. The followiing code shows the properties of the model. 
+```{r}
+summary(model1)
+```
+As shown in the results, all of the 52 predictors are relevant and used in the random forest model with 500 trees. Lastly, the prediction model is used to predict a test set with 20 different cases. The following code shows the results.
+```{r}
+predict(model1,testing)
+```
